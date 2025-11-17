@@ -13,11 +13,11 @@ Started: 2025-11-17
 
 Changes needed:
 - [x] Update version from 0.5 to 1.0
-- [ ] Expand header from 6 bytes to 16 bytes
-- [ ] Add sequence number (sqn) tracking for replay protection
-- [ ] Add random field (rnd) generation for nonce
-- [ ] Implement AES-GCM encryption for all payloads
-- [ ] Implement AES-GCM MAC generation and verification
+- [x] Expand header from 6 bytes to 16 bytes
+- [x] Add sequence number (sqn) tracking for replay protection
+- [x] Add random field (rnd) generation for nonce
+- [x] Implement AES-GCM encryption for all payloads
+- [~] Implement AES-GCM MAC generation and verification
 - [ ] Handle encrypted temporary key (etk) for login requests
 - [ ] Implement key management (temporary key → final transfer key)
 
