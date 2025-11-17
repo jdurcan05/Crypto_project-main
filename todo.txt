@@ -1,0 +1,54 @@
+Crypto project todo
+
+General plus other files:
+Changes only in login, mtp, server and client
+Generate RSA public and private keys based on classroom activity
+Store said keys in appropriate folders
+These two are the only things different in server and client
+Commands only usable after final transfer key decided on
+
+MTP:
+Sequence numbers (big endian m) and replay detection. ONLY SET new SQN AFTER TOTAL VERIFICATION
+
+Actual encryption - AES GCM mode. MAC of 12 bytes
+
+After Len, add sqn, rnd, rsv. Add Mac at end
+
+Change version number to 01 00
+
+Rnd = six bytes of freshly generated bits
+
+Rsv = 2 bytes that are always 00 00
+
+Login requests (00 00) include a 32 byte temporary key encrypted with RSA OAEP 2048 bit rsa pub key
+
+Server needs to take TK and decrypt rest of login message
+
+Server response uses TK (temp key)
+
+If login successful (described in login) then take derived key and only use that
+
+No error if any message fail, just quietly close connection
+
+Login:
+Need to make full login protocol with random numbers and everything
+
+User sends password and username to authenticate. Server auto authenticated by having key
+
+User sends temporary key to encrypt login. First message sent with servers pub key
+
+Messages of login protocol must be sent to mtp
+
+Login request message (00 00) has timestamp \n username \n password \n client random
+
+Timestamp unsigned int for how many second ma after January 1 1970 00:00:00 (UTC). On Unix systems, can use time.time_ns()
+
+Client random is hex converted to string. 16 bytes of random
+
+Response needs to add server random hex to string of 16 byte random
+
+Timestamp response windows should be an adjustable variable (but make it 2 seconds) which is 1 second over current time or under
+
+Also check to see if same request was not received within acceptance window from another client
+
+Final transfer key from client and server random with salt as request hash using hkdf key verification function and sha256 as internal hash
