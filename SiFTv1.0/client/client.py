@@ -2,6 +2,7 @@
 
 import sys, os, socket, cmd, getpass
 from Crypto.Hash import SHA256
+from Crypto.PublicKey import RSA
 from siftprotocols.siftmtp import SiFT_MTP, SiFT_MTP_Error
 from siftprotocols.siftlogin import SiFT_LOGIN, SiFT_LOGIN_Error
 from siftprotocols.siftcmd import SiFT_CMD, SiFT_CMD_Error
@@ -12,6 +13,7 @@ from siftprotocols.siftdnl import SiFT_DNL, SiFT_DNL_Error
 server_ip = '127.0.0.1' # localhost
 # server_ip = '192.168.x.y'
 server_port = 5150
+server_pubkey_file = 'server_pubkey.pem'  # Server's RSA public key
 # --------------------------------
 
 class SiFTShell(cmd.Cmd):
@@ -189,6 +191,19 @@ class SiFTShell(cmd.Cmd):
 # --------------------------------------
 if __name__ == '__main__':
 
+    # Load server's RSA public key
+    try:
+        with open(server_pubkey_file, 'rb') as f:
+            server_pubkey = RSA.import_key(f.read())
+        print('Server public key loaded from: ' + server_pubkey_file)
+    except FileNotFoundError:
+        print('Error: Server public key file not found: ' + server_pubkey_file)
+        print('Please ensure server_pubkey.pem is in the current directory.')
+        sys.exit(1)
+    except Exception as e:
+        print('Error loading server public key: ' + str(e))
+        sys.exit(1)
+
     try:
         sckt = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         sckt.connect((server_ip, server_port))
@@ -199,7 +214,7 @@ if __name__ == '__main__':
         print('Connection to server established on ' + server_ip + ':' + str(server_port))
 
     mtp = SiFT_MTP(sckt)
-    loginp = SiFT_LOGIN(mtp)
+    loginp = SiFT_LOGIN(mtp, server_pubkey)
 
     print()
     username = input('   Username: ')
