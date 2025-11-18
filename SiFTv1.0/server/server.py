@@ -4,6 +4,7 @@ import sys, threading, socket, getpass
 from siftprotocols.siftmtp import SiFT_MTP, SiFT_MTP_Error
 from siftprotocols.siftlogin import SiFT_LOGIN, SiFT_LOGIN_Error
 from siftprotocols.siftcmd import SiFT_CMD, SiFT_CMD_Error
+from Crypto.PublicKey import RSA
 
 class Server:
     def __init__(self):
@@ -14,6 +15,16 @@ class Server:
         self.server_usersfile_fld_delimiter = ':'
         self.server_rootdir = './users/'
         self.server_ip = socket.gethostbyname('localhost')
+        privkeyfile = "server_private_key.pem"
+
+        with open(privkeyfile, 'rb') as f:
+            keypairstr = f.read()
+
+        try:
+            self.keyPair = RSA.import_key(keypairstr)
+        except ValueError:
+            raise SiFT_LOGIN_Error('Error: Cannot import private key from file ' + privkeyfile) 
+
         # self.server_ip = socket.gethostbyname(socket.gethostname())
         self.server_port = 5150
         # -------------------------------------------------------------
@@ -22,6 +33,7 @@ class Server:
         self.server_socket.listen(5)
         print('Listening on ' + self.server_ip + ':' + str(self.server_port))
         self.accept_connections()
+
 
 
     def load_users(self, usersfile):
@@ -51,6 +63,7 @@ class Server:
         print('New client on ' + addr[0] + ':' + str(addr[1]))
 
         mtp = SiFT_MTP(client_socket)
+        mtp.set_RSAcipher(self.keyPair)
 
         loginp = SiFT_LOGIN(mtp)
         users = self.load_users(self.server_usersfile)
