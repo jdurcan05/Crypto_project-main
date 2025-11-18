@@ -28,7 +28,7 @@ class SiFT_MTP:
 
         self.DEBUG = True
 
-        # --------- CONSTANTS (SiFT v1.0) ------------
+        #CONSTANTS
         self.version_major = 1
         self.version_minor = 0
         self.msg_hdr_ver = b'\x01\x00'  # v1.0 header
@@ -38,9 +38,9 @@ class SiFT_MTP:
         self.size_msg_hdr_ver = 2
         self.size_msg_hdr_typ = 2
         self.size_msg_hdr_len = 2
-        self.size_msg_hdr_sqn = 2  # Sequence number for replay protection
-        self.size_msg_hdr_rnd = 6  # Random value for nonce uniqueness
-        self.size_msg_hdr_rsv = 2  # Reserved for future use
+        self.size_msg_hdr_sqn = 2 
+        self.size_msg_hdr_rnd = 6  
+        self.size_msg_hdr_rsv = 2 
 
         # MAC (authentication tag) size for AES-GCM
         self.size_msg_mac = 12
@@ -70,15 +70,10 @@ class SiFT_MTP:
         self.peer_socket = peer_socket
 
         # Sequence number tracking for replay protection
-        # Client and server each maintain separate send/receive counters
-        self.sqn_send = 0  # Next sequence number to send
-        self.sqn_receive = 0  # Last received sequence number
+        self.sqn_send = 0 
+        self.sqn_receive = 0 
 
-        # Key management
-        # The transfer_key is used for AES-GCM encryption/decryption
-        # - Initially None (must be set before sending non-login messages)
-        # - Set to temporary key during login
-        # - Updated to final transfer key after successful login
+        # Key management: The transfer_key is used for AES-GCM encryption/decryption
         self.transfer_key = None
 
 
@@ -194,7 +189,7 @@ class SiFT_MTP:
             SiFT_MTP_Error: On any error in reception, parsing, or decryption
         """
 
-        # Step 1: Receive header
+        #Receive header
         try:
             msg_hdr = self.receive_bytes(self.size_msg_hdr)
         except SiFT_MTP_Error as e:
@@ -203,7 +198,7 @@ class SiFT_MTP:
         if len(msg_hdr) != self.size_msg_hdr:
             raise SiFT_MTP_Error('Incomplete message header received')
 
-        # Step 2: Parse and validate header
+        #Parse and validate header
         parsed_msg_hdr = self.parse_msg_header(msg_hdr)
 
         if parsed_msg_hdr['ver'] != self.msg_hdr_ver:
@@ -218,7 +213,7 @@ class SiFT_MTP:
         msg_len = int.from_bytes(parsed_msg_hdr['len'], byteorder='big')
         msg_type = parsed_msg_hdr['typ']
 
-        # Step 3: Receive message body (encrypted payload + MAC)
+        #Receive message body (encrypted payload + MAC)
         try:
             msg_body = self.receive_bytes(msg_len - self.size_msg_hdr)
         except SiFT_MTP_Error as e:
@@ -234,23 +229,16 @@ class SiFT_MTP:
         if len(msg_body) != msg_len - self.size_msg_hdr:
             raise SiFT_MTP_Error('Incomplete message body received')
 
-        # Step 4: Verify sequence number (replay protection)
         # The received sqn must be greater than the last received sqn
         if msg_sqn <= self.sqn_receive:
             raise SiFT_MTP_Error(f'Sequence number error: received {msg_sqn}, expected > {self.sqn_receive}')
 
-        # Step 5: Decrypt and verify using AES-GCM
-        # For login_req, the message body contains: epd + mac + etk (256 bytes)
-        # For all other messages: epd + mac
-
+        #Decrypt and verify using AES-GCM
         if self.transfer_key is None:
             raise SiFT_MTP_Error('Transfer key not set, cannot decrypt message')
 
         # Extract encrypted payload and MAC
-        # MAC is the last 12 bytes (before ETK if present)
         if msg_type == self.type_login_req:
-            # Login request has ETK at the end
-            # Format: epd + mac (12 bytes) + etk (256 bytes)
             if len(msg_body) < self.size_msg_mac + self.size_msg_etk:
                 raise SiFT_MTP_Error('Login request message body too short')
             epd_length = len(msg_body) - self.size_msg_mac - self.size_msg_etk
@@ -258,8 +246,6 @@ class SiFT_MTP:
             mac = msg_body[epd_length:epd_length + self.size_msg_mac]
             etk = msg_body[epd_length + self.size_msg_mac:]
         else:
-            # Regular messages
-            # Format: epd + mac (12 bytes)
             if len(msg_body) < self.size_msg_mac:
                 raise SiFT_MTP_Error('Message body too short')
             epd = msg_body[:-self.size_msg_mac]
@@ -273,7 +259,6 @@ class SiFT_MTP:
         cipher = AES.new(self.transfer_key, AES.MODE_GCM, nonce=nonce, mac_len=self.size_msg_mac)
 
         # Add header as additional authenticated data (AAD)
-        # The MAC covers the entire header
         cipher.update(msg_hdr)
 
         # Decrypt and verify
@@ -282,7 +267,7 @@ class SiFT_MTP:
         except ValueError as e:
             raise SiFT_MTP_Error('MAC verification failed - message authentication error')
 
-        # Step 6: Update receive sequence number
+        #Update receive sequence number
         self.sqn_receive = msg_sqn
 
         # Return message type, decrypted payload, and ETK (if present)
@@ -332,20 +317,19 @@ class SiFT_MTP:
         if self.transfer_key is None:
             raise SiFT_MTP_Error('Transfer key not set, cannot send message')
 
-        # Step 1: Increment sequence number
+        #Increment sequence number
         self.sqn_send += 1
         sqn_bytes = self.sqn_send.to_bytes(self.size_msg_hdr_sqn, byteorder='big')
 
-        # Step 2: Generate random value (6 bytes) using cryptographic RNG
+        #Generate random value (6 bytes) using cryptographic RNG
         rnd_bytes = secrets.token_bytes(self.size_msg_hdr_rnd)
 
-        # Step 3: Construct nonce from sqn + rnd
+        #Construct nonce from sqn + rnd
         nonce = sqn_bytes + rnd_bytes
 
-        # Step 4: Create AES-GCM cipher for encryption
+        #Create AES-GCM cipher for encryption
         cipher = AES.new(self.transfer_key, AES.MODE_GCM, nonce=nonce, mac_len=self.size_msg_mac)
 
-        # Step 5: Build header (we'll update it with AAD)
         # Calculate message size
         if etk:
             msg_size = self.size_msg_hdr + len(msg_payload) + self.size_msg_mac + self.size_msg_etk
@@ -355,21 +339,19 @@ class SiFT_MTP:
         msg_hdr_len = msg_size.to_bytes(self.size_msg_hdr_len, byteorder='big')
         rsv_bytes = b'\x00\x00'  # Reserved field
 
-        # Construct complete header
+        #Construct complete header
         msg_hdr = self.msg_hdr_ver + msg_type + msg_hdr_len + sqn_bytes + rnd_bytes + rsv_bytes
 
         # Add header as additional authenticated data (AAD)
         cipher.update(msg_hdr)
 
-        # Step 6: Encrypt payload and generate MAC
+        #Encrypt payload and generate MAC
         epd, mac = cipher.encrypt_and_digest(msg_payload)
 
-        # Step 7: Build complete message
+        #Build complete message
         if etk:
-            # Login request: header + epd + mac + etk
             complete_msg = msg_hdr + epd + mac + etk
         else:
-            # Regular messages: header + epd + mac
             complete_msg = msg_hdr + epd + mac
 
         # DEBUG output
@@ -382,7 +364,7 @@ class SiFT_MTP:
                 print('ETK (' + str(len(etk)) + '): ' + etk.hex()[:64] + '...')
             print('------------------------------------------')
 
-        # Step 8: Send message
+        #Send message
         try:
             self.send_bytes(complete_msg)
         except SiFT_MTP_Error as e:
