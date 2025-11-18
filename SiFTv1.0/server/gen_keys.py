@@ -3,7 +3,7 @@ from Crypto.PublicKey import RSA
 #Idk if we need anything more
 
 pubkeyfile = "server_public_key.pem"
-privkeyfile = "server_private_key.pem"
+privkeyfile = "server_public_key.pem"
 
 
 keypair = RSA.generate(2048)

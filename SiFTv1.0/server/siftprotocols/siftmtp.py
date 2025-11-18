@@ -4,7 +4,8 @@ import socket
 import secrets
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
-
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 
 class SiFT_MTP_Error(Exception):
     """Exception class for MTP errors"""
@@ -80,8 +81,18 @@ class SiFT_MTP:
         # - Set to temporary key during login
         # - Updated to final transfer key after successful login
         self.transfer_key = None
+        privkeyfile = "server_private_key.pem"
 
-
+        with open(privkeyfile, 'rb') as f:
+            keypairstr = f.read()
+        try:
+            self.keyPair = RSA.import_key(keypairstr)
+        except ValueError:
+            raise SiFT_MTP_Error('Error: Cannot import private key from file ' + privkeyfile) 
+        
+        self.RSAcipher = PKCS1_OAEP.new(self.keyPair)
+        
+    
     def set_transfer_key(self, key):
         """
         Set the transfer key for AES-GCM encryption/decryption
@@ -243,7 +254,7 @@ class SiFT_MTP:
         # For login_req, the message body contains: epd + mac + etk (256 bytes)
         # For all other messages: epd + mac
 
-        if self.transfer_key is None:
+        if self.transfer_key is None and parsed_msg_hdr['typ'] != self.type_login_req:
             raise SiFT_MTP_Error('Transfer key not set, cannot decrypt message')
 
         # Extract encrypted payload and MAC
@@ -257,6 +268,12 @@ class SiFT_MTP:
             epd = msg_body[:epd_length]
             mac = msg_body[epd_length:epd_length + self.size_msg_mac]
             etk = msg_body[epd_length + self.size_msg_mac:]
+
+            #Should decrypt temporary key
+            tk = self.RSAcipher.decrypt(etk)
+            self.set_transfer_key(tk)
+
+
         else:
             # Regular messages
             # Format: epd + mac (12 bytes)
@@ -265,22 +282,22 @@ class SiFT_MTP:
             epd = msg_body[:-self.size_msg_mac]
             mac = msg_body[-self.size_msg_mac:]
             etk = None
-
-        # Construct nonce: sqn (2 bytes) + rnd (6 bytes) = 8 bytes
+            
+		# Construct nonce: sqn (2 bytes) + rnd (6 bytes) = 8 bytes
         nonce = parsed_msg_hdr['sqn'] + msg_rnd
-
-        # Create AES-GCM cipher for decryption
-        cipher = AES.new(self.transfer_key, AES.MODE_GCM, nonce=nonce, mac_len=self.size_msg_mac)
-
+        
+		# Create AES-GCM cipher for decryption 
         # Add header as additional authenticated data (AAD)
-        # The MAC covers the entire header
+		# The MAC covers the entire header
+			
+        cipher = AES.new(self.transfer_key, AES.MODE_GCM, nonce=nonce, mac_len=self.size_msg_mac)
         cipher.update(msg_hdr)
-
+        
         # Decrypt and verify
         try:
             payload = cipher.decrypt_and_verify(epd, mac)
         except ValueError as e:
-            raise SiFT_MTP_Error('MAC verification failed - message authentication error')
+            raise SiFT_MTP_Error('MAC verification failed - message authentication error')			
 
         # Step 6: Update receive sequence number
         self.sqn_receive = msg_sqn
