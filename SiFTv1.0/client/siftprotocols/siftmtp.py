@@ -4,6 +4,9 @@ import socket
 import secrets
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto import Random
 
 
 class SiFT_MTP_Error(Exception):
@@ -75,6 +78,17 @@ class SiFT_MTP:
 
         # Key management: The transfer_key is used for AES-GCM encryption/decryption
         self.transfer_key = None
+
+        pubkeyfile = 'server_public_key.pem'
+
+        with open(pubkeyfile, 'rb') as f:
+            pubkeystr = f.read()
+        try:
+            pubkey = RSA.import_key(pubkeystr)
+        except ValueError:
+            raise SiFT_MTP_Error('Error: Cannot import private key from file ' + pubkeyfile) 
+
+        self.RSAcipher = PKCS1_OAEP.new(pubkey)
 
 
     def set_transfer_key(self, key):
@@ -313,7 +327,12 @@ class SiFT_MTP:
         Raises:
             SiFT_MTP_Error: If unable to send or transfer key not set
         """
-
+        if msg_type == self.type_login_req:
+            #This can be done elsewhere i suppose
+            tk = Random.get_random_bytes(32)
+            self.set_transfer_key(tk)
+            etk = self.RSAcipher.encrypt(tk)
+            
         if self.transfer_key is None:
             raise SiFT_MTP_Error('Transfer key not set, cannot send message')
 
