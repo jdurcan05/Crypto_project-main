@@ -4,7 +4,6 @@ import socket
 import secrets
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 
 class SiFT_MTP_Error(Exception):
@@ -81,19 +80,10 @@ class SiFT_MTP:
         # - Set to temporary key during login
         # - Updated to final transfer key after successful login
         self.transfer_key = None
-        privkeyfile = "server_private_key.pem"
-
-        with open(privkeyfile, 'rb') as f:
-            keypairstr = f.read()
-        try:
-            keyPair = RSA.import_key(keypairstr)
-        except ValueError:
-            raise SiFT_MTP_Error('Error: Cannot import private key from file ' + privkeyfile) 
         
-        self.RSAcipher = PKCS1_OAEP.new(keyPair)
 
-
-        
+    def set_RSAcipher(self, pubkey):
+        self.RSAcipher = PKCS1_OAEP.new(pubkey)
     
     def set_transfer_key(self, key):
         """
@@ -256,9 +246,6 @@ class SiFT_MTP:
         # For login_req, the message body contains: epd + mac + etk (256 bytes)
         # For all other messages: epd + mac
 
-        if self.transfer_key is None and parsed_msg_hdr['typ'] != self.type_login_req:
-            raise SiFT_MTP_Error('Transfer key not set, cannot decrypt message')
-
         # Extract encrypted payload and MAC
         # MAC is the last 12 bytes (before ETK if present)
         if msg_type == self.type_login_req:
@@ -275,7 +262,6 @@ class SiFT_MTP:
             tk = self.RSAcipher.decrypt(etk)
             self.set_transfer_key(tk) #This can move to login
 
-
         else:
             # Regular messages
             # Format: epd + mac (12 bytes)
@@ -284,7 +270,10 @@ class SiFT_MTP:
             epd = msg_body[:-self.size_msg_mac]
             mac = msg_body[-self.size_msg_mac:]
             etk = None
-            
+        
+        if self.transfer_key is None:
+            raise SiFT_MTP_Error('Transfer key not set, cannot decrypt message')
+        
 		# Construct nonce: sqn (2 bytes) + rnd (6 bytes) = 8 bytes
         nonce = parsed_msg_hdr['sqn'] + msg_rnd
         
