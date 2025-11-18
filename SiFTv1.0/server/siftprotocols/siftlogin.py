@@ -15,7 +15,7 @@ class SiFT_LOGIN_Error(Exception):
         self.err_msg = err_msg
 
 class SiFT_LOGIN:
-    def __init__(self, mtp, server_privkey=None):
+    def __init__(self, mtp):
 
         self.DEBUG = True
         # --------- CONSTANTS ------------
@@ -25,7 +25,6 @@ class SiFT_LOGIN:
         # --------- STATE ------------
         self.mtp = mtp
         self.server_users = None
-        self.server_privkey = server_privkey  # RSA private key for decrypting temporary key 
 
 
     # sets user passwords dictionary (to be used by the server)
@@ -166,41 +165,18 @@ class SiFT_LOGIN:
         if not self.server_users:
             raise SiFT_LOGIN_Error('User database is required for handling login at server')
 
-        if self.server_privkey is None:
-            raise SiFT_LOGIN_Error('Server private key not provided')
-
         # trying to receive a login request
         # Note: MTP returns (msg_type, payload, etk) for login_req messages
         try:
             result = self.mtp.receive_msg()
-            if len(result) == 3:
-                msg_type, msg_payload, etk = result
+            if len(result) == 2:
+                msg_type, msg_payload = result
             else:
                 raise SiFT_LOGIN_Error('Expected ETK in login request but not received')
         except SiFT_MTP_Error as e:
             raise SiFT_LOGIN_Error('Unable to receive login request --> ' + e.err_msg)
 
-        # Decrypt temporary key from ETK using RSA-OAEP
-        try:
-            cipher_rsa = PKCS1_OAEP.new(self.server_privkey)
-            temporary_key = cipher_rsa.decrypt(etk)
-        except Exception as e:
-            raise SiFT_LOGIN_Error('Unable to decrypt temporary key --> ' + str(e))
 
-        if len(temporary_key) != 32:
-            raise SiFT_LOGIN_Error('Decrypted temporary key must be 32 bytes')
-
-        # DEBUG
-        if self.DEBUG:
-            print('Temporary key decrypted: ' + temporary_key.hex()[:32] + '...')
-        # DEBUG
-
-        # Set temporary key in MTP (it was already used to decrypt the login request,
-        # but we need to set it for sending the login response)
-        try:
-            self.mtp.set_transfer_key(temporary_key)
-        except SiFT_MTP_Error as e:
-            raise SiFT_LOGIN_Error('Unable to set temporary key --> ' + e.err_msg)
 
         # DEBUG
         if self.DEBUG:

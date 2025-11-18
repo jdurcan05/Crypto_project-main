@@ -15,7 +15,7 @@ class SiFT_LOGIN_Error(Exception):
         self.err_msg = err_msg
 
 class SiFT_LOGIN:
-    def __init__(self, mtp, server_pubkey=None):
+    def __init__(self, mtp):
 
         self.DEBUG = True
         # --------- CONSTANTS ------------
@@ -25,7 +25,6 @@ class SiFT_LOGIN:
         # --------- STATE ------------
         self.mtp = mtp
         self.server_users = None
-        self.server_pubkey = server_pubkey  # RSA public key for encrypting temporary key 
 
 
     # sets user passwords dictionary (to be used by the server)
@@ -63,8 +62,6 @@ class SiFT_LOGIN:
         # Generate client_random (16 bytes)
         client_random = secrets.token_bytes(16)
 
-        # Generate temporary key (32 bytes for AES-256)
-        temporary_key = secrets.token_bytes(32)
 
         # Build login request payload
         login_req_str = str(timestamp)
@@ -74,14 +71,9 @@ class SiFT_LOGIN:
 
         payload = login_req_str.encode(self.coding)
 
-        # Encrypt temporary key with server's RSA public key using RSA-OAEP
-        if self.server_pubkey is None:
-            raise SiFT_LOGIN_Error('Server public key not provided')
 
-        cipher_rsa = PKCS1_OAEP.new(self.server_pubkey)
-        etk = cipher_rsa.encrypt(temporary_key)
 
-        return payload, client_random, temporary_key, etk
+        return payload, client_random
 
 
     # parses a login request into a dictionary
@@ -227,26 +219,26 @@ class SiFT_LOGIN:
         login_req_struct = {}
         login_req_struct['username'] = username
         login_req_struct['password'] = password
-        msg_payload, client_random, temporary_key, etk = self.build_login_req(login_req_struct)
+        msg_payload, client_random = self.build_login_req(login_req_struct)
 
         # DEBUG
         if self.DEBUG:
             print('Outgoing payload (' + str(len(msg_payload)) + '):')
             print(msg_payload[:max(512, len(msg_payload))].decode('utf-8'))
-            print('Temporary key: ' + temporary_key.hex()[:32] + '...')
+            # print('Temporary key: ' + temporary_key.hex()[:32] + '...')
             print('Client random: ' + client_random.hex())
             print('------------------------------------------')
         # DEBUG
 
         # Set temporary key in MTP for encrypting the login request
-        try:
-            self.mtp.set_transfer_key(temporary_key)
-        except SiFT_MTP_Error as e:
-            raise SiFT_LOGIN_Error('Unable to set temporary key --> ' + e.err_msg)
+        # try:
+        #     self.mtp.set_transfer_key(temporary_key)
+        # except SiFT_MTP_Error as e:
+        #     raise SiFT_LOGIN_Error('Unable to set temporary key --> ' + e.err_msg)
 
         # trying to send login request with encrypted temporary key
         try:
-            self.mtp.send_msg(self.mtp.type_login_req, msg_payload, etk=etk)
+            self.mtp.send_msg(self.mtp.type_login_req, msg_payload)
         except SiFT_MTP_Error as e:
             raise SiFT_LOGIN_Error('Unable to send login request --> ' + e.err_msg)
 
