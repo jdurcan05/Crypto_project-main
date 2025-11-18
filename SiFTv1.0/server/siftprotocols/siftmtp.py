@@ -86,11 +86,13 @@ class SiFT_MTP:
         with open(privkeyfile, 'rb') as f:
             keypairstr = f.read()
         try:
-            self.keyPair = RSA.import_key(keypairstr)
+            keyPair = RSA.import_key(keypairstr)
         except ValueError:
             raise SiFT_MTP_Error('Error: Cannot import private key from file ' + privkeyfile) 
         
-        self.RSAcipher = PKCS1_OAEP.new(self.keyPair)
+        self.RSAcipher = PKCS1_OAEP.new(keyPair)
+
+
         
     
     def set_transfer_key(self, key):
@@ -271,7 +273,7 @@ class SiFT_MTP:
 
             #Should decrypt temporary key
             tk = self.RSAcipher.decrypt(etk)
-            self.set_transfer_key(tk)
+            self.set_transfer_key(tk) #This can move to login
 
 
         else:
@@ -303,10 +305,10 @@ class SiFT_MTP:
         self.sqn_receive = msg_sqn
 
         # Return message type, decrypted payload, and ETK (if present)
-        if etk:
-            return msg_type, payload, etk
-        else:
-            return msg_type, payload
+        # if etk:
+        #     return msg_type, payload, etk
+        # else:
+        return msg_type, payload
 
 
     def send_bytes(self, bytes_to_send):
