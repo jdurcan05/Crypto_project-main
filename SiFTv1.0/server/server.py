@@ -1,6 +1,7 @@
 #python3
 
 import sys, threading, socket, getpass
+from Crypto.PublicKey import RSA
 from siftprotocols.siftmtp import SiFT_MTP, SiFT_MTP_Error
 from siftprotocols.siftlogin import SiFT_LOGIN, SiFT_LOGIN_Error
 from siftprotocols.siftcmd import SiFT_CMD, SiFT_CMD_Error
@@ -8,15 +9,30 @@ from siftprotocols.siftcmd import SiFT_CMD, SiFT_CMD_Error
 class Server:
     def __init__(self):
         # ------------------------ CONFIG -----------------------------
-        self.server_usersfile = 'users.txt' 
+        self.server_usersfile = 'users.txt'
         self.server_usersfile_coding = 'utf-8'
         self.server_usersfile_rec_delimiter = '\n'
         self.server_usersfile_fld_delimiter = ':'
         self.server_rootdir = './users/'
+        self.server_privkey_file = 'server_privkey.pem'
         self.server_ip = socket.gethostbyname('localhost')
         # self.server_ip = socket.gethostbyname(socket.gethostname())
         self.server_port = 5150
         # -------------------------------------------------------------
+
+        # Load server's RSA private key
+        try:
+            with open(self.server_privkey_file, 'rb') as f:
+                self.server_privkey = RSA.import_key(f.read())
+            print('Server private key loaded from: ' + self.server_privkey_file)
+        except FileNotFoundError:
+            print('Error: Server private key file not found: ' + self.server_privkey_file)
+            print('Please generate keys using generate_keys.py')
+            sys.exit(1)
+        except Exception as e:
+            print('Error loading server private key: ' + str(e))
+            sys.exit(1)
+
         self.server_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.server_socket.bind((self.server_ip, self.server_port))
         self.server_socket.listen(5)
@@ -52,7 +68,7 @@ class Server:
 
         mtp = SiFT_MTP(client_socket)
 
-        loginp = SiFT_LOGIN(mtp)
+        loginp = SiFT_LOGIN(mtp, self.server_privkey)
         users = self.load_users(self.server_usersfile)
         loginp.set_server_users(users)
 

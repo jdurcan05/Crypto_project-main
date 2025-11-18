@@ -70,10 +70,13 @@ class SiFT_MTP:
         self.peer_socket = peer_socket
 
         # Sequence number tracking for replay protection
-        self.sqn_send = 0 
-        self.sqn_receive = 0 
+        self.sqn_send = 0
+        self.sqn_receive = 0
 
-        # Key management: The transfer_key is used for AES-GCM encryption/decryption
+        # Key management:
+        # - temporary_key: Used for login messages (login_req, login_res)
+        # - transfer_key: Used for all post-login messages (commands, uploads, downloads)
+        self.temporary_key = None
         self.transfer_key = None
 
 
