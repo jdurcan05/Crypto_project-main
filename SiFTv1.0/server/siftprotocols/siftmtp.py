@@ -273,14 +273,14 @@ class SiFT_MTP:
         
         if self.transfer_key is None:
             raise SiFT_MTP_Error('Transfer key not set, cannot decrypt message')
-        
-		# Construct nonce: sqn (2 bytes) + rnd (6 bytes) = 8 bytes
+
+        # Construct nonce: sqn (2 bytes) + rnd (6 bytes) = 8 bytes
         nonce = parsed_msg_hdr['sqn'] + msg_rnd
-        
-		# Create AES-GCM cipher for decryption 
+
+        # Create AES-GCM cipher for decryption
         # Add header as additional authenticated data (AAD)
-		# The MAC covers the entire header
-			
+        # The MAC covers the entire header
+
         cipher = AES.new(self.transfer_key, AES.MODE_GCM, nonce=nonce, mac_len=self.size_msg_mac)
         cipher.update(msg_hdr)
         

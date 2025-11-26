@@ -1,8 +1,9 @@
 #python3
 
 import time
+import secrets
 from Crypto.Hash import SHA256
-from Crypto.Protocol.KDF import PBKDF2
+from Crypto.Protocol.KDF import PBKDF2, HKDF
 from siftprotocols.siftmtp import SiFT_MTP, SiFT_MTP_Error
 
 
@@ -41,15 +42,18 @@ class SiFT_LOGIN:
 
         login_req_fields = login_req.decode(self.coding).split(self.delimiter)
         login_req_struct = {}
-        login_req_struct['username'] = login_req_fields[0]
-        login_req_struct['password'] = login_req_fields[1]
+        login_req_struct['timestamp'] = int(login_req_fields[0])
+        login_req_struct['username'] = login_req_fields[1]
+        login_req_struct['password'] = login_req_fields[2]
+        login_req_struct['client_random'] = bytes.fromhex(login_req_fields[3])
         return login_req_struct
 
 
     # builds a login response from a dictionary
     def build_login_res(self, login_res_struct):
 
-        login_res_str = login_res_struct['request_hash'].hex() 
+        login_res_str = login_res_struct['request_hash'].hex()
+        login_res_str += self.delimiter + login_res_struct['server_random'].hex()
         return login_res_str.encode(self.coding)
 
 
@@ -67,6 +71,71 @@ class SiFT_LOGIN:
         pwdhash = PBKDF2(pwd, usr_struct['salt'], len(usr_struct['pwdhash']), count=usr_struct['icount'], hmac_hash_module=SHA256)
         if pwdhash == usr_struct['pwdhash']: return True
         return False
+
+
+    # derive final transfer key using HKDF
+    def derive_final_transfer_key(self, client_random, server_random, request_hash):
+        """
+        Derive final transfer key using HKDF
+
+        Args:
+            client_random: 16-byte random value from client
+            server_random: 16-byte random value from server
+            request_hash: 32-byte SHA-256 hash of login request payload
+
+        Returns:
+            32-byte final transfer key
+        """
+        # Input Key Material (IKM) = client_random + server_random
+        ikm = client_random + server_random
+
+        # Salt = request_hash
+        salt = request_hash
+
+        # Derive 32-byte key using HKDF with SHA-256
+        final_key = HKDF(
+            master=ikm,
+            key_len=32,
+            salt=salt,
+            hashmod=SHA256,
+            context=None
+        )
+
+        if self.DEBUG:
+            print('Final transfer key derived using HKDF')
+            print(f'  IKM (client_random + server_random): {ikm.hex()}')
+            print(f'  Salt (request_hash): {salt.hex()}')
+            print(f'  Final key: {final_key.hex()[:32]}...')
+
+        return final_key
+
+
+    # validate timestamp is within acceptance window
+    def validate_timestamp(self, timestamp, acceptance_window=2.0):
+        """
+        Validate timestamp is within acceptance window
+
+        Args:
+            timestamp: Timestamp in nanoseconds since epoch
+            acceptance_window: Acceptance window in seconds (default: 2.0)
+
+        Returns:
+            True if valid, False otherwise
+        """
+        current_time_ns = time.time_ns()
+        current_time_s = current_time_ns / 1e9
+        timestamp_s = timestamp / 1e9
+
+        time_diff = abs(current_time_s - timestamp_s)
+
+        if self.DEBUG:
+            print(f'Timestamp validation:')
+            print(f'  Current time: {current_time_s}')
+            print(f'  Received timestamp: {timestamp_s}')
+            print(f'  Time difference: {time_diff} seconds')
+            print(f'  Acceptance window: ±{acceptance_window/2} seconds')
+
+        return time_diff <= acceptance_window / 2
 
 
     # handles login process (to be used by the server)
@@ -98,6 +167,13 @@ class SiFT_LOGIN:
 
         login_req_struct = self.parse_login_req(msg_payload)
 
+        # Validate timestamp
+        if not self.validate_timestamp(login_req_struct['timestamp']):
+            raise SiFT_LOGIN_Error('Timestamp validation failed - login request too old or in future')
+
+        # Extract client_random for key derivation
+        client_random = login_req_struct['client_random']
+
         # checking username and password
         if login_req_struct['username'] in self.server_users:
             if not self.check_password(login_req_struct['password'], self.server_users[login_req_struct['username']]):
@@ -108,6 +184,11 @@ class SiFT_LOGIN:
         # building login response
         login_res_struct = {}
         login_res_struct['request_hash'] = request_hash
+        login_res_struct['server_random'] = secrets.token_bytes(16)
+
+        # Store server_random for key derivation
+        server_random = login_res_struct['server_random']
+
         msg_payload = self.build_login_res(login_res_struct)
 
         # DEBUG 
@@ -123,10 +204,20 @@ class SiFT_LOGIN:
         except SiFT_MTP_Error as e:
             raise SiFT_LOGIN_Error('Unable to send login response --> ' + e.err_msg)
 
-        # DEBUG 
+        # Derive final transfer key using HKDF
+        final_transfer_key = self.derive_final_transfer_key(
+            client_random,
+            server_random,
+            request_hash
+        )
+
+        # Pass the final transfer key to MTP
+        self.mtp.set_transfer_key(final_transfer_key)
+
+        # DEBUG
         if self.DEBUG:
             print('User ' + login_req_struct['username'] + ' logged in')
-        # DEBUG 
+        # DEBUG
 
         return login_req_struct['username']
 
