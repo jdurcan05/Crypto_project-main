@@ -259,8 +259,12 @@ class SiFT_MTP:
             etk = msg_body[epd_length + self.size_msg_mac:]
 
             #Should decrypt temporary key
-            tk = self.RSAcipher.decrypt(etk)
-            self.set_transfer_key(tk) #This can move to login
+            #SEVER CONNECTION INSTEAD OF DYING IF WRONG KEY
+            try:
+                tk = self.RSAcipher.decrypt(etk)
+                self.set_transfer_key(tk) #This can move to login
+            except:
+                raise SiFT_MTP_Error('Incorrect public key')
 
         else:
             # Regular messages
