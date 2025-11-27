@@ -202,8 +202,8 @@ if __name__ == '__main__':
     mtp = SiFT_MTP(sckt)
     loginp = SiFT_LOGIN(mtp)
 
+    #Import RSA key
     pubkeyfile = 'server_public_key.pem'
-
     with open(pubkeyfile, 'rb') as f:
         pubkeystr = f.read()
     try:
@@ -211,6 +211,7 @@ if __name__ == '__main__':
     except ValueError:
         raise SiFT_LOGIN_Error('Error: Cannot import private key from file ' + pubkeyfile) 
 
+    #Send pub to MTP
     mtp.set_RSAcipher(pubkey)
 
     print()

@@ -86,12 +86,7 @@ class SiFT_MTP:
         self.RSAcipher = PKCS1_OAEP.new(pubkey)
     
     def set_transfer_key(self, key):
-        """
-        Set the transfer key for AES-GCM encryption/decryption
-
-        Args:
-            key: 32-byte AES key (either temporary or final transfer key)
-        """
+        
         if len(key) != 32:
             raise SiFT_MTP_Error('Transfer key must be 32 bytes')
         self.transfer_key = key
@@ -102,7 +97,6 @@ class SiFT_MTP:
 
     def parse_msg_header(self, msg_hdr):
         """
-        Parse a 16-byte v1.0 message header into a dictionary
 
         Header format:
         - ver (2 bytes): Protocol version
@@ -112,11 +106,6 @@ class SiFT_MTP:
         - rnd (6 bytes): Random value for nonce
         - rsv (2 bytes): Reserved
 
-        Args:
-            msg_hdr: 16-byte header as bytes
-
-        Returns:
-            Dictionary with parsed header fields
         """
         parsed_msg_hdr = {}
         i = 0
@@ -148,18 +137,7 @@ class SiFT_MTP:
 
 
     def receive_bytes(self, n):
-        """
-        Receive exactly n bytes from the peer socket
 
-        Args:
-            n: Number of bytes to receive
-
-        Returns:
-            Received bytes
-
-        Raises:
-            SiFT_MTP_Error: If unable to receive or connection broken
-        """
         bytes_received = b''
         bytes_count = 0
 
@@ -179,23 +157,6 @@ class SiFT_MTP:
 
 
     def receive_msg(self):
-        """
-        Receive and decrypt a v1.0 MTP message
-
-        Process:
-        1. Receive 16-byte header
-        2. Parse header and validate version/type
-        3. Receive encrypted payload + MAC (+ ETK for login_req)
-        4. Verify sequence number for replay protection
-        5. Decrypt and verify MAC using AES-GCM
-        6. Update receive sequence number
-
-        Returns:
-            Tuple of (msg_type, decrypted_payload) or (msg_type, payload, etk) for login_req
-
-        Raises:
-            SiFT_MTP_Error: On any error in reception, parsing, or decryption
-        """
 
         # Step 1: Receive header
         try:
@@ -258,8 +219,8 @@ class SiFT_MTP:
             mac = msg_body[epd_length:epd_length + self.size_msg_mac]
             etk = msg_body[epd_length + self.size_msg_mac:]
 
-            #Should decrypt temporary key
-            #SEVER CONNECTION INSTEAD OF DYING IF WRONG KEY
+            #Decrypts tempkey and sets key to tempkey
+            #Will make error message if public key is incorrect
             try:
                 tk = self.RSAcipher.decrypt(etk)
                 self.set_transfer_key(tk) #This can move to login
@@ -305,15 +266,6 @@ class SiFT_MTP:
 
 
     def send_bytes(self, bytes_to_send):
-        """
-        Send all bytes via the peer socket
-
-        Args:
-            bytes_to_send: Bytes to send
-
-        Raises:
-            SiFT_MTP_Error: If unable to send
-        """
         try:
             self.peer_socket.sendall(bytes_to_send)
         except:
@@ -321,25 +273,6 @@ class SiFT_MTP:
 
 
     def send_msg(self, msg_type, msg_payload, etk=None):
-        """
-        Encrypt and send a v1.0 MTP message
-
-        Process:
-        1. Increment send sequence number
-        2. Generate random value for nonce
-        3. Build header with sqn and rnd
-        4. Encrypt payload using AES-GCM with nonce = sqn + rnd
-        5. Generate MAC over header + encrypted payload
-        6. Send: header + encrypted_payload + MAC (+ ETK for login_req)
-
-        Args:
-            msg_type: Message type (2 bytes)
-            msg_payload: Plaintext payload to encrypt and send
-            etk: Encrypted temporary key (256 bytes, only for login_req)
-
-        Raises:
-            SiFT_MTP_Error: If unable to send or transfer key not set
-        """
 
         if self.transfer_key is None:
             raise SiFT_MTP_Error('Transfer key not set, cannot send message')

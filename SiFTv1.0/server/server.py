@@ -17,9 +17,9 @@ class Server:
         self.server_ip = socket.gethostbyname('localhost')
         privkeyfile = "server_private_key.pem"
 
+        #Import RSA key
         with open(privkeyfile, 'rb') as f:
             keypairstr = f.read()
-
         try:
             self.keyPair = RSA.import_key(keypairstr)
         except ValueError:
@@ -63,6 +63,7 @@ class Server:
         print('New client on ' + addr[0] + ':' + str(addr[1]))
 
         mtp = SiFT_MTP(client_socket)
+        #Send keypair to MTP for first message
         mtp.set_RSAcipher(self.keyPair)
 
         loginp = SiFT_LOGIN(mtp)
