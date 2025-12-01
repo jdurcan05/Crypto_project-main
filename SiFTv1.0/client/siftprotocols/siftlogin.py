@@ -75,18 +75,7 @@ class SiFT_LOGIN:
 
     # derive final transfer key using HKDF
     def derive_final_transfer_key(self, client_random, server_random, request_hash):
-        """
-        Derive final transfer key using HKDF
-
-        Args:
-            client_random: 16-byte random value from client
-            server_random: 16-byte random value from server
-            request_hash: 32-byte SHA-256 hash of login request payload
-
-        Returns:
-            32-byte final transfer key
-        """
-        # Input Key Material (IKM) = client_random + server_random
+        # Input Key Material = client_random + server_random
         ikm = client_random + server_random
 
         # Salt = request_hash
@@ -110,7 +99,7 @@ class SiFT_LOGIN:
         return final_key
 
 
-    # handles login process (to be used by the server)
+    # handles login process 
     def handle_login_server(self):
 
         if not self.server_users:
