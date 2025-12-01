@@ -30,17 +30,15 @@ class SiFT_MTP:
         self.size_msg_hdr_ver = 2
         self.size_msg_hdr_typ = 2
         self.size_msg_hdr_len = 2
-        self.size_msg_hdr_sqn = 2  # Sequence number for replay protection
-        self.size_msg_hdr_rnd = 6  # Random value for nonce uniqueness
+        self.size_msg_hdr_sqn = 2  # Sequence number
+        self.size_msg_hdr_rnd = 6  # Random value
         self.size_msg_hdr_rsv = 2  # Reserved for future use
 
-        # MAC (authentication tag) size for AES-GCM
+        # MAC size for AES-GCM
         self.size_msg_mac = 12
 
-        # Encrypted temporary key size (RSA-2048 produces 256 bytes)
+        # Encrypted temporary key size
         self.size_msg_etk = 256
-
-        # Message type constants
         self.type_login_req =    b'\x00\x00'
         self.type_login_res =    b'\x00\x10'
         self.type_command_req =  b'\x01\x00'
@@ -159,8 +157,7 @@ class SiFT_MTP:
         if msg_sqn <= self.sqn_receive:
             raise SiFT_MTP_Error(f'Sequence number error: received {msg_sqn}, expected > {self.sqn_receive}')
 
-        # For login_req, the message body contains: epd + mac + etk (256 bytes)
-        # For all other messages: epd + mac
+        # For login_req, the message body contains: epd + mac + etk and For all other messages: epd + mac
 
         if self.transfer_key is None:
             raise SiFT_MTP_Error('Transfer key not set, cannot decrypt message')
@@ -248,7 +245,7 @@ class SiFT_MTP:
         # Construct complete header
         msg_hdr = self.msg_hdr_ver + msg_type + msg_hdr_len + sqn_bytes + rnd_bytes + rsv_bytes
 
-        # Add header as additional authenticated data (AAD)
+        # Add header as additional authenticated data
         cipher.update(msg_hdr)
 
         # Encrypt payload and generate MAC
@@ -256,10 +253,8 @@ class SiFT_MTP:
 
         # Build complete message
         if etk:
-            # Login request: header + epd + mac + etk
             complete_msg = msg_hdr + epd + mac + etk
         else:
-            # Regular messages: header + epd + mac
             complete_msg = msg_hdr + epd + mac
 
         # DEBUG
