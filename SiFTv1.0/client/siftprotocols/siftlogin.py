@@ -78,7 +78,6 @@ class SiFT_LOGIN:
         # Input Key Material = client_random + server_random
         ikm = client_random + server_random
 
-        # Salt = request_hash
         salt = request_hash
 
         # Derive 32-byte key using HKDF with SHA-256
@@ -101,7 +100,6 @@ class SiFT_LOGIN:
 
     # handles login process 
     def handle_login_server(self):
-
         if not self.server_users:
             raise SiFT_LOGIN_Error('User database is required for handling login at server')
 
