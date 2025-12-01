@@ -75,18 +75,7 @@ class SiFT_LOGIN:
 
     # derive final transfer key using HKDF
     def derive_final_transfer_key(self, client_random, server_random, request_hash):
-        """
-        Derive final transfer key using HKDF
-
-        Args:
-            client_random: 16-byte random value from client
-            server_random: 16-byte random value from server
-            request_hash: 32-byte SHA-256 hash of login request payload
-
-        Returns:
-            32-byte final transfer key
-        """
-        # Input Key Material (IKM) = client_random + server_random
+        # Input Key Material = client_random + server_random
         ikm = client_random + server_random
 
         # Salt = request_hash
@@ -112,16 +101,6 @@ class SiFT_LOGIN:
 
     # validate timestamp is within acceptance window
     def validate_timestamp(self, timestamp, acceptance_window=2.0):
-        """
-        Validate timestamp is within acceptance window
-
-        Args:
-            timestamp: Timestamp in nanoseconds since epoch
-            acceptance_window: Acceptance window in seconds (default: 2.0)
-
-        Returns:
-            True if valid, False otherwise
-        """
         current_time_ns = time.time_ns()
         current_time_s = current_time_ns / 1e9
         timestamp_s = timestamp / 1e9

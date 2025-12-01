@@ -137,7 +137,7 @@ class SiFT_MTP:
         msg_len = int.from_bytes(parsed_msg_hdr['len'], byteorder='big')
         msg_type = parsed_msg_hdr['typ']
 
-        # Receive message body (encrypted payload + MAC)
+        # Receive message body
         try:
             msg_body = self.receive_bytes(msg_len - self.size_msg_hdr)
         except SiFT_MTP_Error as e:
